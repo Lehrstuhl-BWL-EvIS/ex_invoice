@@ -1,5 +1,7 @@
 # ExInvoice
 
+> ⚠️ Work in progress, not ready for production ⚡
+
 **TODO: Add description**
 
 ## Installation
