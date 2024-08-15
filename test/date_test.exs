@@ -1,4 +1,4 @@
-defmodule ExInvoiceTest do
+defmodule ExInvoiceTestDate do
   use ExUnit.Case
   alias ExInvoice
 
