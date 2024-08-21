@@ -4,32 +4,33 @@ defmodule ExInvoice do
   """
 #-----------------------------------------------------------------------------------
 #Zusammefassen der Validierungen
-    # Startet den Agenten beim Start des Moduls
+    # Starting Agent
     def start_link do
       Agent.start_link(fn -> [] end, name: __MODULE__)
     end
 
-    # Funktion zum Speichern von Ergebnissen im Agenten
+    # Saves rsults into agent
     defp store_result(result) do
       Agent.update(__MODULE__, fn results -> [result | results] end)
     end
 
-    # Funktion, die alle gespeicherten Ergebnisse abruft
+    # Function that retrieves all stored results
     def fetch_results do
       Agent.get(__MODULE__, fn results -> results end)
     end
 
-  # Zusammenfassungsfunktion
+  # Summary of results
   def summarize_results do
     results = fetch_results()
     Enum.reduce(results, %{}, fn result, acc ->
       Map.update(acc, result, 1, &(&1 + 1))
     end)
   end
+
+
   #-----------------------------------------------------------------------------------
 
-  #Validierungen
-
+  #Validation
   # Validation of an address
   def validate_address(%{street: street, city: city, postal_code: postal_code}) do
     street_validation = validate_street(street)
@@ -41,7 +42,7 @@ defmodule ExInvoice do
       _ -> {:error, "Invalid address"}
     end
 
-    # Speichere das Ergebnis
+    # Saves result
     store_result(result)
     result
   end
@@ -76,29 +77,45 @@ defmodule ExInvoice do
   defp validate_last_name(_), do: false
 
 
-    @doc """
-  Validates if the tax amount matches the expected amount based on the total amount and tax rate.
-  If no tax is applied, checks for a justification.
-  """
+@doc """
+Validates if the tax amount matches the expected amount based on the total amount and tax rate.
+If no tax is applied, checks for a justification.
+Also checks if the invoice is a simplified invoice based on the total amount being under 250€.
+"""
 def validate_tax(%{total_amount: total, tax_rate: rate, tax_amount: tax, justification: justification}) do
   expected_tax = total * rate / 100
-  cond do
+
+  result = cond do
     rate not in [7, 19] ->
       {:error, "Invalid tax rate. Only 7% or 19% are allowed."}
 
     tax == expected_tax ->
-      {:ok, "Tax amount matches the expected amount."}
+      if total < 250 do
+        {:ok, "Tax amount matches the expected amount. This is a simplified invoice."}
+      else
+        {:ok, "Tax amount matches the expected amount."}
+      end
 
     tax == 0 and is_binary(justification) and byte_size(justification) > 0 ->
-      {:ok, "No tax applied, justification provided."}
+      if total < 250 do
+        {:ok, "No tax applied, justification provided. This is a simplified invoice."}
+      else
+        {:ok, "No tax applied, justification provided."}
+      end
 
     tax == 0 and (is_nil(justification) or byte_size(justification) == 0) ->
       {:error, "No tax applied, but no justification provided."}
 
+    total < 250 ->
+      {:error, "Tax amount does not match the expected amount. This is a simplified invoice."}
+
     true ->
       {:error, "Tax amount does not match the expected amount."}
   end
+  store_result(result)
+  result
 end
+
 
 
    @doc """
@@ -108,23 +125,25 @@ end
     invoice_date_valid = validate_date(invoice_date)
     delivery_date_valid = validate_date(delivery_date)
 
-    cond do
-      # Beide Daten gültig
+    result =  cond do
+      # Both dates are valid
       invoice_date_valid and delivery_date_valid ->
         {:ok, "Both invoice date and delivery date are valid."}
 
-      # Beide Daten ungültig und kein gültiger Verweis
+      # No date is valid, no reference given
       (invoice_date_valid or delivery_date_valid) and is_binary(reference) and byte_size(reference) > 0 ->
         {:ok, "One date is valid, and valid reference provided."}
 
-      # Eines der Daten ungültig und kein gültiger Verweis
+      # One date is valid, but not a referecen provided
       (not invoice_date_valid or not delivery_date_valid) and (is_nil(reference) or byte_size(reference) == 0) ->
         {:error, "One or both dates are invalid and no reference provided."}
 
-      # Sonstige Fälle
+      # everything else
       true ->
         {:error, "Invalid input. Ensure dates are valid and reference details are provided correctly if needed."}
     end
+    store_result(result)
+    result
   end
 
   defp validate_date(nil), do: false
@@ -145,12 +164,13 @@ end
   """
 
   def validate_tax_number(number) when is_binary(number) do
-    # Pattern für eine deutsche Steuernummer (10 oder 11 Ziffern)
+    # Pattern for a German tax number (10 or 11 digits)
     tax_number_regex = ~r/^\d{10,11}$/
-    # Pattern für eine deutsche USt-IdNr. (DE gefolgt von 9 Ziffern)
+    # Pattern for a german USt-IdNr. ("DE" with 9 digits)
     vat_id_regex = ~r/^DE\d{9}$/
 
-    cond do
+    #result =
+        cond do
       Regex.match?(tax_number_regex, number) ->
         {:ok, "Valid German tax number."}
 
@@ -161,16 +181,19 @@ end
         {:error, "Invalid tax number or VAT ID."}
     end
   end
+  #store_result(result)
+  #result
 
   def validate_tax_number(_), do: {:error, "Input must be a string."}
 
        @doc """
-  Handelsübliche Bezeichnung und Anzahl auf Positionsebene überprüfen
+  Verify the standard commercial description and quantity at the item level
   """
 
   def validate_invoice_items(invoice_items, designations) do
     Enum.map(invoice_items, fn {invoice_designation, quantity} ->
-      cond do
+
+      result = cond do
         # Überprüfung, ob die Bezeichnung in der CSV-Datei vorhanden ist
         Map.get(designations, invoice_designation) == nil ->
           {:error, "#{invoice_designation} is not valid or not found in the CSV file."}
@@ -188,8 +211,25 @@ end
           description = Map.get(designations, invoice_designation)
           {:ok, %{designation: invoice_designation, description: description, quantity: quantity}}
       end
+      store_result(result)
+      result
     end)
   end
+  #-----------------------------------------------------------------------------------
+     @doc """
+  A funtction to validate IBAN using Bankster.
+  """
+  def validate_iban(iban) do
+    result =
+      case Bankster.iban_validate(iban) do
+        :ok -> "Valid IBAN"
+        {:ok, _iban} -> "Valid IBAN"
+        {:error, reason} -> "Invalid IBAN: #{reason}"
+      end
+    store_result(result)
+    result
+  end
+
 
 
 end
