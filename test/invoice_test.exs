@@ -8,6 +8,8 @@ defmodule ExInvoiceTest do
     :ok
   end
 
+#------------------------------------------------------------------------------
+#Adress
   test "validates a correct address" do
     address = %{street: "Musterstraße 1", city: "Musterstadt", postal_code: "12345"}
     assert ExInvoice.validate_address(address) == {:ok, "Address is valid"}
@@ -17,17 +19,35 @@ defmodule ExInvoiceTest do
     address = %{street: "", city: "Musterstadt", postal_code: "12345"}
     assert ExInvoice.validate_address(address) == {:error, "Invalid address"}
   end
+#------------------------------------------------------------------------------
+#Name
 
-  test "validates a correct name" do
-    name = %{first_name: "Max", last_name: "Mustermann"}
-    assert ExInvoice.validate_name(name) == {:ok, "Name is valid"}
-  end
+test "validates a correct name" do
+  name = "Bratwurst GmbH & Co. KG"
+  assert ExInvoice.validate_name(name) == {:ok, "Name is valid"}
+end
 
-  test "validates incorrect name" do
-    name = %{first_name: "", last_name: "Mustermann"}
-    assert ExInvoice.validate_name(name) == {:error, "Invalid name"}
-  end
+test "validates a incorrect name" do
+  name = "Bratwurst GmbH ? Co. KG"
+  assert ExInvoice.validate_name(name) == {:error, "Invalid characters in company name"}
+end
 
+test "validates a incorrect lengt name: to long" do
+  name = "Bratwurst GmbH & Co. KG111111111111111111111111111111111111111111111111111111111111111111111111111111111"
+  assert ExInvoice.validate_name(name) == {:error, "Name length"}
+end
+
+test "validates a incorrect lengt name: to short" do
+  name = "1"
+  assert ExInvoice.validate_name(name) == {:error, "Name length"}
+end
+
+test "validates a NIL name" do
+  name = ""
+  assert ExInvoice.validate_name(name) == {:error, "Company name is required"}
+end
+
+#------------------------------------------------------------------------------
   test "validates a correct tax amount" do
     tax_details = %{total_amount: 300, tax_rate: 19, tax_amount: 57, justification: ""}
     assert ExInvoice.validate_tax(tax_details) == {:ok, "Tax amount matches the expected amount."}

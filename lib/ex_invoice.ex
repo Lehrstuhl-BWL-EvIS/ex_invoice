@@ -1,9 +1,9 @@
 defmodule ExInvoice do
   @moduledoc """
-  A module for handling invoice-related logic, including address and name validation.
+  A module for handling invoice-related validations
   """
 #-----------------------------------------------------------------------------------
-#Zusammefassen der Validierungen
+#Summary of validations
     # Starting Agent
     def start_link do
       Agent.start_link(fn -> [] end, name: __MODULE__)
@@ -58,24 +58,32 @@ defmodule ExInvoice do
     Regex.match?(~r/^\d{5}$/, postal_code)
   end
   defp validate_postal_code(_), do: false
+  #-----------------------------------------------------------------------------------
 
-  # Validation of first name and last name
-  def validate_name(%{first_name: first_name, last_name: last_name}) do
-    first_name_validation = validate_first_name(first_name)
-    last_name_validation = validate_last_name(last_name)
+  # Validation of name
+  def validate_name(company_name) do
+    cond do
+      company_name == nil or company_name == "" ->
+        {:error, "Company name is required"}
 
-    case {first_name_validation, last_name_validation} do
-      {true, true} -> {:ok, "Name is valid"}
-      _ -> {:error, "Invalid name"}
+      byte_size(company_name) <= 2 or byte_size(company_name) > 100 ->
+        {:error, "Name length"}
+
+      not valid_characters?(company_name) ->
+        {:error, "Invalid characters in company name"}
+
+      true ->
+        {:ok, "Name is valid"}
     end
   end
 
-  defp validate_first_name(first_name) when is_binary(first_name) and byte_size(first_name) > 0, do: true
-  defp validate_first_name(_), do: false
+  defp valid_characters?(company_name) do
+    # allowed characters: letters, numbers, spaces, "&", ".", "-"
+    valid_characters_regex = ~r/^[a-zA-Z0-9\s&.-]+$/
+    Regex.match?(valid_characters_regex, company_name)
+  end
 
-  defp validate_last_name(last_name) when is_binary(last_name) and byte_size(last_name) > 0, do: true
-  defp validate_last_name(_), do: false
-
+  #-----------------------------------------------------------------------------------
 
 @doc """
 Validates if the tax amount matches the expected amount based on the total amount and tax rate.
@@ -118,9 +126,10 @@ end
 
 
 
-   @doc """
+@doc """
   Validates the presence of invoice and delivery dates or a reference in case one is missing.
-  """
+"""
+
   def validate_dates(%{invoice_date: invoice_date, delivery_date: delivery_date, reference: reference}) do
     invoice_date_valid = validate_date(invoice_date)
     delivery_date_valid = validate_date(delivery_date)
@@ -159,17 +168,15 @@ end
     end
   end
 
-     @doc """
-  A funtction to validate German tax numbers and VAT IDs.
-  """
 
+#A funtction to validate German tax numbers and VAT IDs.
   def validate_tax_number(number) when is_binary(number) do
     # Pattern for a German tax number (10 or 11 digits)
     tax_number_regex = ~r/^\d{10,11}$/
     # Pattern for a german USt-IdNr. ("DE" with 9 digits)
     vat_id_regex = ~r/^DE\d{9}$/
 
-    #result =
+    result =
         cond do
       Regex.match?(tax_number_regex, number) ->
         {:ok, "Valid German tax number."}
@@ -180,15 +187,15 @@ end
       true ->
         {:error, "Invalid tax number or VAT ID."}
     end
+    store_result(result)
+    result
   end
-  #store_result(result)
-  #result
+
 
   def validate_tax_number(_), do: {:error, "Input must be a string."}
 
-       @doc """
-  Verify the standard commercial description and quantity at the item level
-  """
+
+#TBD: Verify the standard commercial description and quantity at the item level
 
   def validate_invoice_items(invoice_items, designations) do
     Enum.map(invoice_items, fn {invoice_designation, quantity} ->
@@ -216,7 +223,7 @@ end
     end)
   end
   #-----------------------------------------------------------------------------------
-     @doc """
+   @doc """
   A funtction to validate IBAN using Bankster.
   """
   def validate_iban(iban) do
