@@ -9,7 +9,7 @@ defmodule ExInvoice do
       Agent.start_link(fn -> [] end, name: __MODULE__)
     end
 
-    # Saves rsults into agent
+    # Saves results into agent
     defp store_result(result) do
       Agent.update(__MODULE__, fn results -> [result | results] end)
     end
