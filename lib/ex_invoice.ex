@@ -4,33 +4,39 @@ defmodule ExInvoice do
   """
 #-----------------------------------------------------------------------------------
 #Summary of validations
+
     # Starting Agent
-    def start_link do
-      Agent.start_link(fn -> [] end, name: __MODULE__)
-    end
 
-    # Saves results into agent
-    defp store_result(result) do
-      Agent.update(__MODULE__, fn results -> [result | results] end)
-    end
+      use Agent
 
-    # Function that retrieves all stored results
-    def fetch_results do
-      Agent.get(__MODULE__, fn results -> results end)
-    end
+      # Start agent
+      def start_link do
+        Agent.start_link(fn -> [] end, name: __MODULE__)
+      end
 
-  # Summary of results
-  def summarize_results do
-    results = fetch_results()
-    Enum.reduce(results, %{}, fn result, acc ->
-      Map.update(acc, result, 1, &(&1 + 1))
-    end)
-  end
+      # Save results into agent
+      def store_result(result) do
+        Agent.update(__MODULE__, fn results -> [result | results] end)
+      end
 
+      # summary of results
+      def summarize_results do
+        results = Agent.get(__MODULE__, fn results -> results end)
+        Enum.reduce(results, %{}, fn result, acc ->
+          Map.update(acc, result, 1, &(&1 + 1))
+        end)
+      end
+
+      # generate text for validations
+      def generate_summary_text do
+        summary = summarize_results()
+        "Summary of results: #{inspect(summary)}"
+      end
 
   #-----------------------------------------------------------------------------------
-
   #Validation
+  #-----------------------------------------------------------------------------------
+
   # Validation of an address
   def validate_address(%{street: street, city: city, postal_code: postal_code}) do
     street_validation = validate_street(street)
@@ -62,7 +68,7 @@ defmodule ExInvoice do
 
   # Validation of name
   def validate_name(company_name) do
-    cond do
+    result = cond do
       company_name == nil or company_name == "" ->
         {:error, "Company name is required"}
 
@@ -75,6 +81,8 @@ defmodule ExInvoice do
       true ->
         {:ok, "Name is valid"}
     end
+    store_result(result)
+    result
   end
 
   defp valid_characters?(company_name) do
@@ -168,7 +176,7 @@ end
     end
   end
 
-
+#-----------------------------------------------------------------------------------
 #A funtction to validate German tax numbers and VAT IDs.
   def validate_tax_number(number) when is_binary(number) do
     # Pattern for a German tax number (10 or 11 digits)
@@ -194,7 +202,7 @@ end
 
   def validate_tax_number(_), do: {:error, "Input must be a string."}
 
-
+#-----------------------------------------------------------------------------------
 #TBD: Verify the standard commercial description and quantity at the item level
 
   def validate_invoice_items(invoice_items, designations) do
@@ -233,7 +241,7 @@ end
         {:ok, _iban} -> "Valid IBAN"
         {:error, reason} -> "Invalid IBAN: #{reason}"
       end
-    store_result(result)
+      store_result(result)
     result
   end
 

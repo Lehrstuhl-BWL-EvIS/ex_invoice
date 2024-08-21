@@ -3,10 +3,17 @@ defmodule ExInvoiceTest do
 
   alias ExInvoice
 
-  setup do
-    ExInvoice.start_link()
+  setup_all do
+    {:ok, _pid} = ExInvoice.start_link()
+
+    on_exit(fn ->
+      summary_text = ExInvoice.generate_summary_text()
+      IO.puts("Ausgabe: " <> summary_text)
+    end)
+
     :ok
   end
+
 
 #------------------------------------------------------------------------------
 #Adress
@@ -32,12 +39,12 @@ test "validates a incorrect name" do
   assert ExInvoice.validate_name(name) == {:error, "Invalid characters in company name"}
 end
 
-test "validates a incorrect lengt name: to long" do
+test "validates a incorrect lengt name: too long" do
   name = "Bratwurst GmbH & Co. KG111111111111111111111111111111111111111111111111111111111111111111111111111111111"
   assert ExInvoice.validate_name(name) == {:error, "Name length"}
 end
 
-test "validates a incorrect lengt name: to short" do
+test "validates a incorrect lengt name: too short" do
   name = "1"
   assert ExInvoice.validate_name(name) == {:error, "Name length"}
 end
@@ -84,4 +91,6 @@ end
 
     assert Enum.all?(result, fn {:ok, _} -> true; _ -> false end)
   end
+
+
 end
