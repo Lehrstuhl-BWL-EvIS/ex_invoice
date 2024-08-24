@@ -1,250 +1,215 @@
 defmodule ExInvoice do
-  @moduledoc """
-  A module for handling invoice-related validations
-  """
-#-----------------------------------------------------------------------------------
-#Summary of validations
+  def validate_invoices(invoices) do
+    Enum.each(invoices[:invoices], fn invoice ->
+      # Check if its a normal invoice (>250€) or a simplfied one (<250€)
 
-    # Starting Agent
+      results =
+        if invoice[:invoice_net] >= 250 do
+          # Normal Invoice
+          [
+            validate_address(invoice[:invoice_address]),
+            validate_address(invoice[:invoice_delivery_address]),
+            validate_tax_number(invoice[:invoice_address][:vat_number]),
+            validate_tax_number(invoice[:invoice_address][:tax_number]),
+            validate_date(invoice[:invoice_date]),
+            validate_date_delivery(
+              invoice[:invoice_date],
+              invoice[:delivery_date],
+              invoice[:note_date]
+            ),
+            validate_invoice_number(invoice[:invoice_number]),
+            validate_tax(
+              invoice[:invoice_tax_rate],
+              invoice[:invoice_net],
+              invoice[:invoice_tax],
+              invoice[:invoice_tax_note]
+            )
+          ]
+        else
+          # Simplified Invoice
+          [
+            validate_address(invoice[:invoice_address]),
+            validate_date(invoice[:invoice_date]),
+            validate_tax(
+              invoice[:invoice_tax_rate],
+              invoice[:invoice_net],
+              invoice[:invoice_tax],
+              invoice[:invoice_tax_note]
+            )
+          ]
+        end
 
-      use Agent
+      # Result for every invoice
+      #IO.inspect(results, label: "Validation results for invoice #{invoice[:invoice_number]}")
+      #TBD no IO for the result of the validations
 
-      # Start agent
-      def start_link do
-        Agent.start_link(fn -> [] end, name: __MODULE__)
+      case Enum.find(results, fn result -> match?({:error, _}, result) end) do
+        nil ->
+          IO.puts("All validations passed for invoice #{invoice[:invoice_number]}.")
+
+        {:error, message} ->
+          IO.puts("Validation failed for invoice #{invoice[:invoice_number]}: #{message}")
       end
-
-      # Save results into agent
-      def store_result(result) do
-        Agent.update(__MODULE__, fn results -> [result | results] end)
-      end
-
-      # summary of results
-      def summarize_results do
-        results = Agent.get(__MODULE__, fn results -> results end)
-        Enum.reduce(results, %{}, fn result, acc ->
-          Map.update(acc, result, 1, &(&1 + 1))
-        end)
-      end
-
-      # generate text for validations
-      def generate_summary_text do
-        summary = summarize_results()
-        "Summary of results: #{inspect(summary)}"
-      end
-
-  #-----------------------------------------------------------------------------------
-  #Validation
-  #-----------------------------------------------------------------------------------
-
-  # Validation of an address
-  def validate_address(%{street: street, city: city, postal_code: postal_code}) do
-    street_validation = validate_street(street)
-    city_validation = validate_city(city)
-    postal_code_validation = validate_postal_code(postal_code)
-
-    result = case {street_validation, city_validation, postal_code_validation} do
-      {true, true, true} -> {:ok, "Address is valid"}
-      _ -> {:error, "Invalid address"}
-    end
-
-    # Saves result
-    store_result(result)
-    result
-  end
-
-  defp validate_street(street) when is_binary(street) and byte_size(street) > 0, do: true
-  defp validate_street(_), do: false
-
-  defp validate_city(city) when is_binary(city) and byte_size(city) > 0, do: true
-  defp validate_city(_), do: false
-
-  # German Postal Code
-  defp validate_postal_code(postal_code) when is_binary(postal_code) do
-    Regex.match?(~r/^\d{5}$/, postal_code)
-  end
-  defp validate_postal_code(_), do: false
-  #-----------------------------------------------------------------------------------
-
-  # Validation of name
-  def validate_name(company_name) do
-    result = cond do
-      company_name == nil or company_name == "" ->
-        {:error, "Company name is required"}
-
-      byte_size(company_name) <= 2 or byte_size(company_name) > 100 ->
-        {:error, "Name length"}
-
-      not valid_characters?(company_name) ->
-        {:error, "Invalid characters in company name"}
-
-      true ->
-        {:ok, "Name is valid"}
-    end
-    store_result(result)
-    result
-  end
-
-  defp valid_characters?(company_name) do
-    # allowed characters: letters, numbers, spaces, "&", ".", "-"
-    valid_characters_regex = ~r/^[a-zA-Z0-9\s&.-]+$/
-    Regex.match?(valid_characters_regex, company_name)
-  end
-
-  #-----------------------------------------------------------------------------------
-
-@doc """
-Validates if the tax amount matches the expected amount based on the total amount and tax rate.
-If no tax is applied, checks for a justification.
-Also checks if the invoice is a simplified invoice based on the total amount being under 250€.
-"""
-def validate_tax(%{total_amount: total, tax_rate: rate, tax_amount: tax, justification: justification}) do
-  expected_tax = total * rate / 100
-
-  result = cond do
-    rate not in [7, 19] ->
-      {:error, "Invalid tax rate. Only 7% or 19% are allowed."}
-
-    tax == expected_tax ->
-      if total < 250 do
-        {:ok, "Tax amount matches the expected amount. This is a simplified invoice."}
-      else
-        {:ok, "Tax amount matches the expected amount."}
-      end
-
-    tax == 0 and is_binary(justification) and byte_size(justification) > 0 ->
-      if total < 250 do
-        {:ok, "No tax applied, justification provided. This is a simplified invoice."}
-      else
-        {:ok, "No tax applied, justification provided."}
-      end
-
-    tax == 0 and (is_nil(justification) or byte_size(justification) == 0) ->
-      {:error, "No tax applied, but no justification provided."}
-
-    total < 250 ->
-      {:error, "Tax amount does not match the expected amount. This is a simplified invoice."}
-
-    true ->
-      {:error, "Tax amount does not match the expected amount."}
-  end
-  store_result(result)
-  result
-end
-
-
-
-@doc """
-  Validates the presence of invoice and delivery dates or a reference in case one is missing.
-"""
-
-  def validate_dates(%{invoice_date: invoice_date, delivery_date: delivery_date, reference: reference}) do
-    invoice_date_valid = validate_date(invoice_date)
-    delivery_date_valid = validate_date(delivery_date)
-
-    result =  cond do
-      # Both dates are valid
-      invoice_date_valid and delivery_date_valid ->
-        {:ok, "Both invoice date and delivery date are valid."}
-
-      # No date is valid, no reference given
-      (invoice_date_valid or delivery_date_valid) and is_binary(reference) and byte_size(reference) > 0 ->
-        {:ok, "One date is valid, and valid reference provided."}
-
-      # One date is valid, but not a referecen provided
-      (not invoice_date_valid or not delivery_date_valid) and (is_nil(reference) or byte_size(reference) == 0) ->
-        {:error, "One or both dates are invalid and no reference provided."}
-
-      # everything else
-      true ->
-        {:error, "Invalid input. Ensure dates are valid and reference details are provided correctly if needed."}
-    end
-    store_result(result)
-    result
-  end
-
-  defp validate_date(nil), do: false
-  defp validate_date(date) when is_binary(date) do
-    case Date.from_iso8601(date) do
-      {:ok, _date_struct} ->
-        true
-      {:error, :invalid_format} ->
-        IO.puts("Invalid date format detected: #{date}")
-        false
-      _error ->
-        false
-    end
-  end
-
-#-----------------------------------------------------------------------------------
-#A funtction to validate German tax numbers and VAT IDs.
-  def validate_tax_number(number) when is_binary(number) do
-    # Pattern for a German tax number (10 or 11 digits)
-    tax_number_regex = ~r/^\d{10,11}$/
-    # Pattern for a german USt-IdNr. ("DE" with 9 digits)
-    vat_id_regex = ~r/^DE\d{9}$/
-
-    result =
-        cond do
-      Regex.match?(tax_number_regex, number) ->
-        {:ok, "Valid German tax number."}
-
-      Regex.match?(vat_id_regex, number) ->
-        {:ok, "Valid German VAT ID."}
-
-      true ->
-        {:error, "Invalid tax number or VAT ID."}
-    end
-    store_result(result)
-    result
-  end
-
-
-  def validate_tax_number(_), do: {:error, "Input must be a string."}
-
-#-----------------------------------------------------------------------------------
-#TBD: Verify the standard commercial description and quantity at the item level
-
-  def validate_invoice_items(invoice_items, designations) do
-    Enum.map(invoice_items, fn {invoice_designation, quantity} ->
-
-      result = cond do
-        # Überprüfung, ob die Bezeichnung in der CSV-Datei vorhanden ist
-        Map.get(designations, invoice_designation) == nil ->
-          {:error, "#{invoice_designation} is not valid or not found in the CSV file."}
-
-        # Überprüfung, ob die Menge eine Ganzzahl ist
-        not is_integer(quantity) ->
-          {:error, "Invalid quantity for #{invoice_designation}. Quantity must be an integer."}
-
-        # Überprüfung, ob die Menge größer als null ist
-        quantity <= 0 ->
-          {:error, "Invalid quantity for #{invoice_designation}. Quantity must be greater than zero."}
-
-        # Falls alles gültig ist, wird die Übereinstimmung bestätigt
-        true ->
-          description = Map.get(designations, invoice_designation)
-          {:ok, %{designation: invoice_designation, description: description, quantity: quantity}}
-      end
-      store_result(result)
-      result
     end)
   end
-  #-----------------------------------------------------------------------------------
-   @doc """
-  A funtction to validate IBAN using Bankster.
-  """
-  def validate_iban(iban) do
-    result =
-      case Bankster.iban_validate(iban) do
-        :ok -> "Valid IBAN"
-        {:ok, _iban} -> "Valid IBAN"
-        {:error, reason} -> "Invalid IBAN: #{reason}"
+
+  # -----------------------------------------------------------------------------------
+
+  defp validate_address(%{
+         company: company,
+         forename: forename,
+         surname: surname,
+         street: street,
+         city: city,
+         postal_code: postal_code,
+         country: country
+       }) do
+    # Check if all necessary fields are available
+    if (not is_nil(company) or (not is_nil(surname) and not is_nil(forename))) and
+         not is_nil(street) and street != "" and
+         not is_nil(city) and city != "" and
+         not is_nil(postal_code) and postal_code != "" and
+         not is_nil(country) and country != "" do
+      # Checks Postal Code
+      case validate_postal_code(postal_code, country) do
+        {:ok, _} = result -> result
+        {:error, _} = error -> error
       end
-      store_result(result)
-    result
+    else
+      {:error, "Missing field: company/surname, street, city, postal_code, country."}
+    end
   end
 
+  defp validate_address(_), do: {:error, "Address not complete."}
 
+  defp validate_postal_code(postal_code, "DE") do
+    if Regex.match?(~r/^\d{5}$/, postal_code) do
+      {:ok, "Address is valid."}
+    else
+      {:error, "German postal code is not valid."}
+    end
+  end
+
+  # Every other postal code from another country gets just confirmed. TBD? Validations for other Countries
+  defp validate_postal_code(_postal_code, _country),
+    do: {:ok, "Adress is valid, but postal code not checked as its not a german postal code."}
+
+  # -----------------------------------------------------------------------------------
+  # A private funtction to validate German tax numbers and VAT IDs.
+
+  defp validate_tax_number(number) when is_binary(number) do
+    # Pattern for a German tax number (10 or 11 digits)
+    # https://de.wikipedia.org/wiki/Steuernummer
+    # https://ec.europa.eu/taxation_customs/vies/#/vat-validation
+    # https://github.com/taxjar/ex_vatcheck
+    # Probably have to be more
+    # IO.puts("INPUT_TAX number: #{number}")
+    tax_number_regex = ~r/^\d{3}\/\d{3}\/\d{5}$/
+    # Pattern for a German USt-IdNr. ("DE" with 9 digits)
+    vat_id_regex = ~r/^DE\d{9}$/
+
+    cond do
+      Regex.match?(tax_number_regex, number) ->
+        {:ok, "#{number} Tax_Number_valid"}
+
+      Regex.match?(vat_id_regex, number) ->
+        {:ok, "#{number} VAT_Number_valid"}
+
+      true ->
+        {:error, "#{number} Invalid tax number or VAT ID."}
+    end
+  end
+
+  defp validate_tax_number(_), do: {:error, "No VAT or tax number provided"}
+
+  # -----------------------------------------------------------------------------------
+  # Checks Date
+  # defp validate_date(%Date{} = _date) do
+  #   {:ok, "Valid date."}
+  # end
+
+  # defp validate_date(nil) do
+  #   {:error, "No date provided."}
+  # end
+
+  # defp validate_date(_) do
+  #   {:error, "Invalid date format or value."}
+  # end
+
+  defp validate_date(date) do
+    cond do
+      is_nil(date) ->
+        {:error, "No date provided."}
+
+      is_struct(date, Date) ->
+        {:ok, "Valid date."}
+
+      true ->
+        {:error, "Invalid date format or value."}
+    end
+  end
+
+  defp validate_date_delivery(invoice_date, delivery_date, note_date) do
+    cond do
+      # Check if `delivery_date` is nil and the note "Rechnungsdatum = Lieferdatum" is provided
+      is_nil(delivery_date) and note_date == "Rechnungsdatum = Lieferdatum" ->
+        {:ok, "Valid: Rechnungsdatum = Lieferdatum"}
+
+      # Check if `delivery_date` is nil and the note "Rechnungsdatum = Lieferdatum" is not provided
+      is_nil(delivery_date) ->
+        {:error,
+         "Fehler: Kein Lieferdatum vorhanden und der Hinweis 'Rechnungsdatum = Lieferdatum' fehlt."}
+
+      # Check if `delivery_date` and `invoice_date` are valid dates and are the same
+      validate_date(delivery_date) == {:ok, "Valid date."} and delivery_date == invoice_date ->
+        {:ok, "Valid: Rechnungsdatum = Lieferdatum"}
+
+      # Check if `delivery_date` and `invoice_date` are valid dates and are different
+      validate_date(delivery_date) == {:ok, "Valid date."} ->
+        {:ok, "Valid: Delivery Date #{delivery_date}, Invoice Date #{invoice_date}"}
+
+      # Fallback
+      true ->
+        {:error, "Date input error"}
+    end
+  end
+
+  # -----------------------------------------------------------------------------------
+  # Checks invoice number
+  defp validate_invoice_number(nil) do
+    {:error, "Invoice number not provided."}
+  end
+
+  defp validate_invoice_number(invoice_number) when is_binary(invoice_number) do
+    if String.trim(invoice_number) == "" do
+      {:error, "Invoice number not provided."}
+    else
+      {:ok, "Invoice number provided: #{invoice_number}"}
+    end
+  end
+
+  # -----------------------------------------------------------------------------------
+  # checks whether the tax rate has been calculated correctly and applied
+  defp validate_tax(tax_rate, total_net, total_tax, tax_note) do
+    cond do
+      is_nil(total_net) or is_nil(total_tax) or is_nil(tax_rate) ->
+        {:error, "tax: missing field"}
+
+      total_net <= 0 or total_tax < 0 or tax_rate not in [0, 7, 19] ->
+        {:error, "tax: invalid input value"}
+
+      tax_rate == 0 and String.trim(tax_note) == "" ->
+        {:error, "tax: no reason for tax exemption provided"}
+
+      # Checks if the provided tax rate matches the calculated one.
+      tax_rate != round(total_tax / total_net * 100) ->
+        {:error, "tax_rate does not match the calculated tax rate"}
+
+      true ->
+        {:ok, "#{tax_rate}% tax applied correctly"}
+    end
+  end
+  # -----------------------------------------------------------------------------------
+  # -----------------------------------------------------------------------------------
 
 end
