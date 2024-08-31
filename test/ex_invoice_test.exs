@@ -32,7 +32,8 @@ defmodule ExInvoiceTest do
               country: "DE",
               notes: nil,
               vat_number: "DE123456789",
-              tax_number: "123/456/78910"
+              tax_number: "123/456/78910",
+              IBAN: "123"
             },
             invoice_delivery_address: %{
               title: nil,
@@ -51,7 +52,7 @@ defmodule ExInvoiceTest do
             invoice_items: [
               %{
                 item_number: "A1314",
-                item_name: "BeerOpener 2000",
+                item_name: "Test",
                 item_description: "Manueller Kronkorkenentfernungswerkzeug",
                 item_comments: "",
                 item_quantity: 2,
@@ -68,7 +69,7 @@ defmodule ExInvoiceTest do
                 item_name: "How-To: BeerOpener 2000",
                 item_description: "Buch",
                 item_comments: "",
-                item_quantity: 1,
+                item_quantity: 4,
                 item_price: 50,
                 item_discount_amount: 0,
                 item_discount_percentage: 0,
