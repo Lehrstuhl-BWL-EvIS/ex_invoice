@@ -33,7 +33,12 @@ defmodule ExInvoiceTest do
               notes: nil,
               vat_number: "DE123456789",
               tax_number: "123/456/78910",
-              IBAN: "123"
+              legal_court: "Amtsgericht München",
+              legal_HRB: "1234567",
+              bank_name: "Sparkasse München",
+              bank_IBAN: "DE89370400440532013000",
+              bank_BIC: "1234",
+              bank_owner: "Peter Lustig"
             },
             invoice_delivery_address: %{
               title: nil,
