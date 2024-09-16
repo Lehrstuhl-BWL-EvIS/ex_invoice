@@ -1,3 +1,4 @@
+/* General Styles */
 body {
     font-family: Arial, sans-serif;
     margin: 0;
@@ -20,9 +21,12 @@ body {
     align-items: center;
 }
 
-.company-details {
-    width: 45%;
-    margin-top: 100px;
+.customer-details {
+    text-align: left;
+}
+
+.invoice-date {
+    text-align: right;
 }
 
 .header img {
@@ -30,37 +34,25 @@ body {
     max-height: 4cm;
 }
 
-.invoice-date {
-    text-align: right;
-    width: 45%;
-}
-
-.invoice-date div {
-    margin-bottom: 8px;
-}
-
 .invoice-title {
+    text-align: left;
     font-size: 24px;
     font-weight: bold;
-    margin-top: 40px;
+    margin: 20px 0;
 }
 
 .invoice-details {
-    margin-top: 10px;
+    margin-bottom: 20px;
 }
 
-.invoice-details div {
-    margin-bottom: 5px;
-}
-
+/* Table Styles */
 .table {
-    margin-top: 20px;
     width: 100%;
     border-collapse: collapse;
+    margin-bottom: 20px;
 }
 
-.table th,
-.table td {
+.table th, .table td {
     border: 1px solid #ddd;
     padding: 8px;
     text-align: left;
@@ -71,19 +63,50 @@ body {
     font-weight: bold;
 }
 
+/* Totals and Notes */
 .totals {
     margin-top: 20px;
     text-align: right;
 }
 
 .totals div {
-    margin-bottom: 8px;
+    margin-bottom: 5px;
 }
 
 .notes {
-    margin-top: 30px;
+    margin-top: 20px;
 }
 
 .notes div {
-    margin-bottom: 10px;
+    margin-bottom: 5px;
 }
+
+.invoice-date div {
+    margin-bottom: 8px;
+}
+
+/* Footer Styles */
+footer.footer {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0; 
+    border-top: 1px solid #ddd;
+    margin-top: 20px;
+}
+
+.footer-column {
+    width: 30%;
+    font-size: 10px;
+    line-height: 1.4;
+}
+
+.footer-column strong {
+    display: block;
+    margin-bottom: 5px;
+}
+
+.footer-column:last-child {
+    text-align: left;
+}
+
