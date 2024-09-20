@@ -10,7 +10,7 @@ defmodule ExInvoice.Application do
     children = [
       # Starts a worker by calling: ExInvoice.Worker.start_link(arg)
       # {ExInvoice.Worker, arg}
-      ChromicPDF
+      {ChromicPDF, [session_pool: [size: 25]]}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

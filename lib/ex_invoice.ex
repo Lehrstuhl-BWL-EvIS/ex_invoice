@@ -1,156 +1,62 @@
 defmodule ExInvoice do
-  @moduledoc """
-  T handles the validation of invoices and provides a set of functions to ensure that
-  all aspects of an invoice comply with German law.
-
-
-  In order to prove the correctness and integrity of invoices, a series of checks on
-  individual components such as invoice number, date, items, and totals are performed.
-  The validations help in detecting errors or inconsistencies before the invoice is processed.
-
-  Input data is provided via a list:
-   ### Main Types:
-
-  - `invoice/0`: Represents an invoice with all necessary fields.
-  - `address/0`: Represents an address, which is used for both the billing and delivery addresses.
-  - `item/0`: Represents an individual item in the invoice.
-
-  @type address :: %{
-          title: String.t() | nil,
-          forename: String.t() | nil,
-          surname: String.t() | nil,
-          company: String.t() | nil,,
-          street: String.t(),
-          address2: String.t() | nil,
-          address3: String.t() | nil,
-          city: String.t(),
-          postal_code: String.t(),
-          county: String.t(),
-          country: String.t(),
-          notes: String.t() | nil,
-          vat_number: String.t() | nil,
-          tax_number: String.t() | nil,
-          IBAN: String.t() | nil
-        }
-
-  @type item :: %{
-          item_number: String.t(),
-          item_name: String.t(),
-          item_description: String.t(),
-          item_comments: String.t() | nil,
-          item_quantity: integer(),
-          item_price: float(),
-          item_discount_amount: float()| nil,,
-          item_discount_percentage: float()| nil,,
-          item_reference: String.t() | nil,
-          item_tax_rate: float(),
-          item_total_net: float(),
-          item_total_tax: float()
-        }
-
-  @type invoice :: %{
-          invoice_number: String.t(),
-          customer_order_number: integer() | nil,
-          account_reference: String.t() | nil,,
-          order_number: String.t() | nil,
-          foreign_rate: float(),
-          notes1: String.t() | nil,
-          notes2: String.t() | nil,
-          notes3: String.t() | nil,
-          currency_used: boolean() | nil,,
-          invoice_date: Date.t(),
-          delivery_date: Date.t(),
-          note_date: Date.t() | nil,
-          invoice_address: address(),   # Nested address type
-          invoice_delivery_address: address(),  # Nested address type
-          invoice_items: [item()],  # Nested list of item type
-          invoice_net: float(),
-          invoice_tax: float(),
-          invoice_tax_rate: float(),
-          invoice_total: float(),
-          invoice_skonto: %{
-            rate: float(),
-            days: integer()
-          }| nil,
-          invoice_tax_note: String.t() | nil,
-          invoice_retention_notice: String.t()| nil,
-        }
-
-  @type invoices_list :: %{
-          invoices: [invoice()]  # List of invoice types
-        }
-
-  """
-
-  def validate_invoices(invoices) do
-    Enum.each(invoices[:invoices], fn invoice ->
-      # Check if its a normal invoice (>250€) or a simplified one (<250€)
-
-      results =
-        if invoice[:invoice_net] >= 250 do
-          # Normal Invoice
-          [
-            validate_address(invoice[:invoice_address]),
-            validate_address(invoice[:invoice_delivery_address]),
-            validate_tax_number(invoice[:invoice_address][:vat_number]),
-            validate_tax_number(invoice[:invoice_address][:tax_number]),
-            validate_date(invoice[:invoice_date]),
-            validate_date_delivery(
-              invoice[:invoice_date],
-              invoice[:delivery_date],
-              invoice[:note_date]
-            ),
-            validate_invoice_number(invoice[:invoice_number]),
-            validate_tax(
-              invoice[:invoice_tax_rate],
-              invoice[:invoice_net],
-              invoice[:invoice_tax],
-              invoice[:invoice_tax_note]
-            ),
-            validate_all_items(invoice[:invoice_items]),
-            Bankster.Iban.validate(invoice[:invoice_address][:bank_IBAN])
-          ]
-        else
-          # Simplified Invoice
-          [
-            validate_address(invoice[:invoice_address]),
-            validate_date(invoice[:invoice_date]),
-            validate_tax(
-              invoice[:invoice_tax_rate],
-              invoice[:invoice_net],
-              invoice[:invoice_tax],
-              invoice[:invoice_tax_note]
-            ),
-            validate_all_items(invoice[:invoice_items])
-          ]
-        end
-
-      # Result for every invoice
-      # IO.inspect(results, label: "Validation results for invoice #{invoice[:invoice_number]}")
-
-      case Enum.find(results, fn result -> match?({:error, _}, result) end) do
-        nil ->
-          IO.puts("All validations passed for invoice #{invoice[:invoice_number]}.")
-          # Create a HTML File for using ChromicPDF
-          invoice_html = create_html_invoice(invoice)
-          # Create an output folder in case it doesnt exist
-          File.mkdir_p!("invoices_output")
-          # Filename of HTML=invoice number
-          # filename = "invoice_#{invoice[:invoice_number]}.html"
-          # Creates the HTML
-          # File.write!(Path.join("invoices_output", filename), invoice_html)
-
-          filename_pdf = "invoice_#{invoice[:invoice_number]}.pdf"
-          generate_pdf(invoice_html, filename_pdf)
-
-        {:error, message} ->
-          IO.puts("Validation failed for invoice #{invoice[:invoice_number]}: #{message}")
+  def validate_invoices(invoice) do
+    # Check if its a normal invoice (>250€) or a simplified one (<250€)
+    results =
+      if invoice.invoice_net >= 250 do
+        # Normal Invoice
+        [
+          validate_address(invoice.invoice_address),
+          validate_address(invoice.invoice_delivery_address),
+          validate_tax_number(invoice.invoice_address.vat_number),
+          validate_tax_number(invoice.invoice_address.tax_number),
+          validate_date(invoice.invoice_date),
+          validate_date_delivery(
+            invoice.invoice_date,
+            invoice.delivery_date,
+            invoice.note_date
+          ),
+          validate_invoice_number(invoice[:invoice_number]),
+          validate_tax(
+            invoice.invoice_tax_rate,
+            invoice.invoice_net,
+            invoice.invoice_tax,
+            invoice.invoice_tax_note
+          ),
+          validate_all_items(invoice.invoice_items),
+          Bankster.Iban.validate(invoice.invoice_address.bank_IBAN)
+        ]
+      else
+        # Simplified Invoice
+        [
+          validate_address(invoice.invoice_address),
+          validate_date(invoice.invoice_date),
+          validate_tax(
+            invoice.invoice_tax_rate,
+            invoice.invoice_net,
+            invoice.invoice_tax,
+            invoice.invoice_tax_note
+          ),
+          validate_all_items(invoice.invoice_items)
+        ]
       end
-    end)
+
+    # Result for every invoice
+    # IO.inspect(results, label: "Validation results for invoice #{invoice[:invoice_number]}")
+
+    case Enum.find(results, fn result -> match?({:error, _}, result) end) do
+      nil ->
+        # IO.puts("All validations passed for invoice #{invoice[:invoice_number]}.")
+
+        generate_pdf(invoice)
+
+      {:error, message} ->
+        nil
+        # IO.puts("Validation failed for invoice #{invoice[:invoice_number]}: #{message}")
+    end
   end
 
   # -----------------------------------------------------------------------------------
-
+  # Functions to check if an adress is complete
   defp validate_address(%{
          company: company,
          forename: forename,
@@ -173,8 +79,9 @@ defmodule ExInvoice do
   end
 
   defp validate_address(_), do: {:error, "Address not complete."}
-
+  # validate_name(company, forename, surname),
   defp validate_name(nil, nil, nil), do: {:error, "Missing field: surname or company name"}
+  defp validate_name(_, nil, nil), do: :ok
   defp validate_name(nil, _, _), do: :ok
   defp validate_name(_, _, _), do: :ok
 
@@ -205,11 +112,6 @@ defmodule ExInvoice do
 
   defp validate_tax_number(number) when is_binary(number) do
     # Pattern for a German tax number (10 or 11 digits)
-    # https://de.wikipedia.org/wiki/Steuernummer
-    # https://ec.europa.eu/taxation_customs/vies/#/vat-validation
-    # https://github.com/taxjar/ex_vatcheck
-    # Probably have to be more
-    # IO.puts("INPUT_TAX number: #{number}")
     tax_number_regex = ~r/^\d{3}\/\d{3}\/\d{5}$/
     # Pattern for a German USt-IdNr. ("DE" with 9 digits)
     vat_id_regex = ~r/^DE\d{9}$/
@@ -230,29 +132,16 @@ defmodule ExInvoice do
 
   # -----------------------------------------------------------------------------------
   # Checks Date
-  # defp validate_date(%Date{} = _date) do
-  #   {:ok, "Valid date."}
-  # end
+  defp validate_date(%Date{} = _date) do
+    {:ok, "Valid date."}
+  end
 
-  # defp validate_date(nil) do
-  #   {:error, "No date provided."}
-  # end
+  defp validate_date(nil) do
+    {:error, "No date provided."}
+  end
 
-  # defp validate_date(_) do
-  #   {:error, "Invalid date format or value."}
-  # end
-
-  defp validate_date(date) do
-    cond do
-      is_nil(date) ->
-        {:error, "No date provided."}
-
-      is_struct(date, Date) ->
-        {:ok, "Valid date."}
-
-      true ->
-        {:error, "Invalid date format or value."}
-    end
+  defp validate_date(_) do
+    {:error, "Invalid date format or value."}
   end
 
   defp validate_date_delivery(invoice_date, delivery_date, note_date) do
@@ -381,6 +270,25 @@ defmodule ExInvoice do
   end
 
   # -----------------------------------------------------------------------------------
+  # PDF Creation via ChromicPDF
+
+  def generate_pdf(invoice) do
+    # Create a HTML File for using ChromicPDF
+    invoice_html = create_html_invoice(invoice)
+    # Create an output folder in case it doesnt exist
+    File.mkdir_p!("invoices_output")
+    # Filename of HTML=invoice number
+    filename = "invoice_#{invoice[:invoice_number]}.pdf"
+
+    [
+      size: :a4,
+      content: invoice_html
+    ]
+    |> ChromicPDF.Template.source_and_options()
+    |> ChromicPDF.print_to_pdfa(output: Path.join("invoices_output", filename))
+  end
+
+  # -----------------------------------------------------------------------------------
   # Creates a html necessary for the pdf print via chromic_pdf
 
   defp create_html_invoice(invoice) do
@@ -399,101 +307,106 @@ defmodule ExInvoice do
     </head>
     <body>
     <div class="invoice-box">
-        <div class="header">
-           <div class="customer-details">
-                <div>#{invoice.invoice_delivery_address.company}</div>
-                <div>#{invoice.invoice_delivery_address.street}</div>
-                <div>#{invoice.invoice_delivery_address.postal_code} #{invoice.invoice_delivery_address.city}</div>
+       <div class="header">
+          <div class="customer-details">
+               <div>#{invoice.invoice_delivery_address.company}</div>
+               <div>#{invoice.invoice_delivery_address.street}</div>
+               <div>#{invoice.invoice_delivery_address.postal_code} #{invoice.invoice_delivery_address.city}</div>
+          </div>
+           <div class="invoice-date">
+               <img src="file://#{logo_path}" alt="Company Logo"><br>
+               <div>Rechnungsdatum: #{invoice.invoice_date}</div>
+               <div>Lieferdatum: #{invoice.delivery_date}</div>
+               <strong>#{invoice.invoice_address.company}</strong><br>
+               #{invoice.invoice_address.street}<br>
+               #{invoice.invoice_address.postal_code} #{invoice.invoice_address.city}<br>
+               #{invoice.invoice_address.country}<br>
            </div>
-            <div class="invoice-date">
-                <img src="file://#{logo_path}" alt="Company Logo"><br>
-                <div>Invoice Date: #{invoice.invoice_date}</div>
-                <div>Delivery Date: #{invoice.delivery_date}</div>
-                <strong>#{invoice.invoice_address.company}</strong><br>
-                #{invoice.invoice_address.street}<br>
-                #{invoice.invoice_address.postal_code} #{invoice.invoice_address.city}<br>
-                #{invoice.invoice_address.country}<br>
-            </div>
-        </div>
+       </div>
 
-        <div class="invoice-title">
-            Rechnung
-        </div>
+       <div class="invoice-title">
+           Rechnung
+       </div>
 
-        <div class="invoice-details">
-            <div>Rechnungsnummer: #{invoice.invoice_number}</div>
-            <div>Auftrags-Nr.: #{invoice.order_number || "N/A"}</div>
-            <div>Kundenreferenz: #{invoice.account_reference}</div>
-        </div>
+       <div class="invoice-details">
+           <div>Rechnungsnummer: #{invoice.invoice_number}</div>
+           <div>Auftrags-Nr.: #{invoice.order_number || "N/A"}</div>
+           <div>Kundenreferenz: #{invoice.account_reference}</div>
+       </div>
 
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Pos.</th>
-                    <th>Art-Nr.</th>
-                    <th>Bezeichnung</th>
-                    <th>Menge</th>
-                    <th>Einheit</th>
-                    <th>Preis/Einh. (€)</th>
-                    <th>Gesamt (€)</th>
-                </tr>
-            </thead>
-            <tbody>
-                #{create_item(invoice.invoice_items)}
-              <tr>
-                <td colspan="7">&nbsp;</td>
-              </tr>
-                <tr>
-                    <td colspan="6" style="text-align: left;">Summe Netto:</td>
-                    <td style="text-align: right;">#{invoice.invoice_net} €</td>
-                </tr>
-                <tr>
-                    <td colspan="6" style="text-align: left;">MWST (#{invoice.invoice_tax_rate}%):</td>
-                    <td style="text-align: right;">#{invoice.invoice_tax} €</td>
-                </tr>
-                <tr>
-                    <td colspan="6" style="text-align: left;"><strong>Endsumme:</strong></td>
-                    <td style="text-align: right;"><strong>#{invoice.invoice_total} €</strong></td>
-                </tr>
+       <table class="table">
+           <thead>
+               <tr>
+                   <th>Pos.</th>
+                   <th>Art-Nr.</th>
+                   <th>Bezeichnung</th>
+                   <th>Menge</th>
+                   <th>Einheit</th>
+                   <th>Preis/Einh. (€)</th>
+                   <th>Gesamt (€)</th>
+               </tr>
+           </thead>
+           <tbody>
+               #{create_item(invoice.invoice_items)}
+             <tr>
+               <td colspan="7">&nbsp;</td>
+             </tr>
+               <tr>
+                   <td colspan="6" style="text-align: left;">Summe Netto:</td>
+                   <td style="text-align: right;">#{invoice.invoice_net} €</td>
+               </tr>
+               <tr>
+                   <td colspan="6" style="text-align: left;">MWST (#{invoice.invoice_tax_rate}%):</td>
+                   <td style="text-align: right;">#{invoice.invoice_tax} €</td>
+               </tr>
+               <tr>
+                   <td colspan="6" style="text-align: left;"><strong>Endsumme:</strong></td>
+                   <td style="text-align: right;"><strong>#{invoice.invoice_total} €</strong></td>
+               </tr>
 
-            </tbody>
-        </table>
-        <div class="notes">
-            <div>Bitte überweisen SIe den Rechnungsbetrag innerhalb von 14 Tagen auf unser unten genanntes Konto. </div>
-            <div>Rechnungsbetrag zahlbar abzüglich #{invoice.invoice_skonto.rate}% Skonto innerhalb von #{invoice.invoice_skonto.days} Tagen ab Rechnungsdatum.</div>
-            <div>Lieferbedingungen: #{invoice.notes1 || "N/A"}</div>
-            <div>Andere Hinweise: #{invoice.invoice_retention_notice}</div>
-            <br>
-            <div> Für weitere Fragen stehen wir Ihnen gerne zu Verfügung.</div>
-            <br>
-            <div>Mit freundlichen Grüßen</div>
-        </div>
+           </tbody>
+       </table>
+       <div class="notes">
+           <div>Bitte überweisen SIe den Rechnungsbetrag innerhalb von 14 Tagen auf unser unten genanntes Konto. </div>
+           <div>Rechnungsbetrag zahlbar abzüglich #{invoice.invoice_skonto.rate}% Skonto innerhalb von #{invoice.invoice_skonto.days} Tagen ab Rechnungsdatum.</div>
+           <div>Lieferbedingungen: #{invoice.notes1 || "N/A"}</div>
+           <div>Andere Hinweise: #{invoice.invoice_retention_notice}</div>
+           <br>
+           <div> Für weitere Fragen stehen wir Ihnen gerne zu Verfügung.</div>
+           <br>
+           <div>Mit freundlichen Grüßen</div>
+       </div>
     </div>
-     <footer class="footer">
-        <div class="footer-column">
-            <!-- Left Column: Company Address -->
-            <strong>#{invoice.invoice_address.company}</strong><br>
-            #{invoice.invoice_address.street}<br>
-            #{invoice.invoice_address.city}, #{invoice.invoice_address.postal_code}<br>
-            #{invoice.invoice_address.country}
-            </div>
+    <footer class="footer">
+       <div class="footer-column">
+           <!-- Left Column: Company Address -->
+           #{invoice.invoice_address.company}<br>
+           #{invoice.invoice_address.street}<br>
+           #{invoice.invoice_address.city}, #{invoice.invoice_address.postal_code}<br>
+           #{invoice.invoice_address.country}
+           </div>
+      <div class="footer-column">
+           <!-- Left Column: Company Address -->
+           Mail: #{invoice.invoice_address.contact_mail}<br>
+           Telefonnummer: #{invoice.invoice_address.contact_tel}<br>
+           Fax: #{invoice.invoice_address.contact_fax}<br>
+           Internet: #{invoice.invoice_address.contact_web}
+           </div>
 
-        <div class="footer-column">
-            <!-- Center Column: Bank Account Details -->
-            <strong>Bankverbindung:</strong><br>
-            Bank: #{invoice.invoice_address.bank_name}<br>
-            IBAN: #{invoice.invoice_address.bank_IBAN}<br>
-            BIC: #{invoice.invoice_address.bank_BIC}<br>
-            Kto. Inh.: #{invoice.invoice_address.bank_owner}<br>
-        </div>
-        <div class="footer-column">
-         <!-- Right Column: VAT-ID and Legal Info -->
-          <strong>UST-ID:</strong> #{invoice.invoice_address.vat_number}<br>
-          <strong>Steuernummer:</strong> #{invoice.invoice_address.tax_number}<br>
-          <strong>Amtsgericht:</strong> #{invoice.invoice_address.legal_court}<br>
-          <strong>Handelsregisternummer:</strong> #{invoice.invoice_address.legal_HRB}
-
-        </div>
+       <div class="footer-column">
+           <!-- Center Column: Bank Account Details -->
+           Bank: #{invoice.invoice_address.bank_name}<br>
+           IBAN: #{invoice.invoice_address.bank_IBAN}<br>
+           BIC: #{invoice.invoice_address.bank_BIC}<br>
+           Kto. Inh.: #{invoice.invoice_address.bank_owner}<br>
+       </div>
+       <div class="footer-column">
+        <!-- Right Column: VAT-ID and Legal Info -->
+         UST-ID: #{invoice.invoice_address.vat_number}<br>
+         Steuernummer: #{invoice.invoice_address.tax_number} <br>
+         Amtsgericht: #{invoice.invoice_address.legal_court} <br>
+         Handelsregisternummer: #{invoice.invoice_address.legal_HRB}
+       </div>
 
     </footer>
 
@@ -521,17 +434,6 @@ defmodule ExInvoice do
   end
 
   # -----------------------------------------------------------------------------------
-  # PDF Creation via ChromicPDF
-
-  def generate_pdf(data, filename) do
-    # output_file = Path.join("invoices_output", filename_pdf)
-    [
-      size: :a4,
-      content: data
-    ]
-    |> ChromicPDF.Template.source_and_options()
-    |> ChromicPDF.print_to_pdfa(output: Path.join("invoices_output", filename))
-  end
-
-  # -----------------------------------------------------------------------------------
 end
+
+# -----------------------------------------------------------------------------------

@@ -5,7 +5,7 @@ defmodule ExInvoice.MixProject do
     [
       app: :ex_invoice,
       version: "0.1.0",
-      elixir: "~> 1.16",
+      elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
       deps: deps()
     ]
@@ -27,8 +27,8 @@ defmodule ExInvoice.MixProject do
       {:bankster, "~> 0.4.0"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:chromic_pdf, "~> 1.17"},
-      {:ex_doc, "~> 0.31", only: :dev, runtime: false}
-      # {:websockex, "~> 0.4.3"}
+      {:ex_doc, "~> 0.31", only: :dev, runtime: false},
+      {:faker, "~> 0.18", only: :test}
     ]
   end
 end
