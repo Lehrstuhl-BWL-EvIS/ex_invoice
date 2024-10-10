@@ -28,7 +28,8 @@ defmodule ExInvoice.MixProject do
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:chromic_pdf, "~> 1.17"},
       {:ex_doc, "~> 0.31", only: :dev, runtime: false},
-      {:faker, "~> 0.18", only: :test}
+      {:faker, "~> 0.18", only: :test},
+      {:ex_vatcheck, "~> 0.3.1"}
     ]
   end
 end
