@@ -153,3 +153,4 @@ ex_invoice-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+assets/css/old_styles.css

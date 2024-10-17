@@ -1,27 +1,20 @@
 defmodule ExInvoiceTest do
   use ExUnit.Case
 
-  # Gemeinsame Basisstruktur für die Tests name similar to EXTENDED-Profils
   @valid_invoice %{
-    # invoice number
     id: "2024_Q3_234234",
-    # fix code for invoice type 74 = invoice to be paid
     typecode: 74,
-    # buyer_reference
     buyer_reference: "2INTER00",
     seller_order_referenced_document: nil,
     notes1: nil,
     currency_used: false,
-    # Rechnungsdatum
     issue_date_time: ~D[2024-08-10],
-    # DeliveryDate
     occurrence_date_time: ~D[2024-08-12],
     note_date: nil,
     seller_trade_party: %{
       forename: "Biller_forename",
       surname: "Biller_surname",
       trading_business_name: "Biller_trading_business_name_name",
-      # Street
       line_one: "Biller_line_one",
       city_name: "Biller_city_name",
       post_code_code: "80333",
@@ -36,7 +29,6 @@ defmodule ExInvoiceTest do
       bank_IBAN: "DE89370400440532013000",
       bank_BIC: "1234",
       bank_owner: "biller_bank_owner",
-      # Mail
       uri_id: "Biller_Mail@test.de",
       contact_tel: "1234567890",
       contact_fax: "0987654321",
@@ -44,7 +36,7 @@ defmodule ExInvoiceTest do
     },
     buyertradeparty: %{
       forename: nil,
-      surname: "",
+      surname: nil,
       trading_business_name: "customer",
       line_one: "Customer_line_one. 345",
       address2: nil,
@@ -104,16 +96,79 @@ defmodule ExInvoiceTest do
   end
 
   test "Invalid invoice number too long" do
+    # Erzeuge eine ungültige Rechnung mit einer zu langen ID
     invalid_invoice = Map.put(@valid_invoice, :id, "12346789101111111111111111111111111111111111")
 
     assert ExInvoice.validate_invoice(invalid_invoice) ==
-             {:error, "Value exceeds maximum length of 20 characters."}
+             {:error,
+              "Validation failed for invoice #{invalid_invoice.id}: Value exceeds maximum length of 20 characters."}
   end
 
   test "Invalid invoice number" do
     # id = nil
     invalid_invoice = Map.put(@valid_invoice, :id, nil)
-    assert ExInvoice.validate_invoice(invalid_invoice) == {:error, "Invoice number not provided"}
+
+    assert ExInvoice.validate_invoice(invalid_invoice) ==
+             {:error,
+              "Validation failed for invoice #{invalid_invoice.id}: Invoice number not provided"}
+  end
+
+  # Dates
+  #Test issue_date_time = empty
+  test "issue_date_time = empty" do
+    invalid_invoice = Map.put(@valid_invoice, :issue_date_time, "")
+
+    assert ExInvoice.validate_invoice(invalid_invoice) ==
+             {:error,
+              "Validation failed for invoice #{invalid_invoice.id}: Invalid date format or value"}
+  end
+
+  #Test issue_date_time = nil
+  test "issue_date_time = nil" do
+    invalid_invoice = Map.put(@valid_invoice, :issue_date_time, nil)
+
+    assert ExInvoice.validate_invoice(invalid_invoice) ==
+             {:error, "Validation failed for invoice #{invalid_invoice.id}: No date provided"}
+  end
+
+  #Test issue_date_time wrong format
+  test "issue_date_time wrong format" do
+    invalid_invoice = Map.put(@valid_invoice, :issue_date_time, "12343243245")
+
+    assert ExInvoice.validate_invoice(invalid_invoice) ==
+             {:error,
+              "Validation failed for invoice #{invalid_invoice.id}: Invalid date format or value"}
+  end
+
+  #Test occurrence_date_time wrong format
+  test "occurrence_date_time wrong format" do
+    invalid_invoice = Map.put(@valid_invoice, :occurrence_date_time, "12343243245")
+
+    assert ExInvoice.validate_invoice(invalid_invoice) ==
+             {:error, "Validation failed for invoice #{invalid_invoice.id}: Date input error"}
+  end
+
+  #Test occurrence_date_time = nil Rechnungsdatum = Lieferdatum"
+  test "occurrence_date_time Rechnungsdatum = Lieferdatum" do
+    invalid_invoice =
+      @valid_invoice
+      |> Map.put(:occurrence_date_time, nil)
+      |> Map.put(:note_date, "Rechnungsdatum = Lieferdatum")
+
+    assert ExInvoice.validate_invoice(invalid_invoice) ==
+             {:ok, "Validation successful. PDF 2024_Q3_234234.pdf is created."}
+  end
+
+  #Test occurrence_date_time = nil Rechnungsdatum = NIX
+  test "occurrence_date_time Rechnungsdatum = NIX" do
+    invalid_invoice =
+      @valid_invoice
+      |> Map.put(:occurrence_date_time, nil)
+      |> Map.put(:note_date, "Rechnungsdatum = NIX")
+
+    assert ExInvoice.validate_invoice(invalid_invoice) ==
+             {:error,
+              "Validation failed for invoice #{invalid_invoice.id}: No delivery date and hint 'Rechnungsdatum = Lieferdatum' is missing"}
   end
 
   # Test for street too long
@@ -130,7 +185,8 @@ defmodule ExInvoiceTest do
       )
 
     assert ExInvoice.validate_invoice(invalid_invoice) ==
-             {:error, "Value exceeds maximum length of 35 characters."}
+             {:error,
+              "Validation failed for invoice #{invalid_invoice.id}: Value exceeds maximum length of 35 characters."}
   end
 
   # ADRESS
@@ -143,7 +199,9 @@ defmodule ExInvoiceTest do
         Map.put(@valid_invoice.seller_trade_party, :line_one, nil)
       )
 
-    assert ExInvoice.validate_invoice(invalid_invoice) == {:error, "Missing field: line_one"}
+    assert ExInvoice.validate_invoice(invalid_invoice) ==
+             {:error,
+              "Validation failed for invoice #{invalid_invoice.id}: Missing field: line_one"}
   end
 
   # Test for city_name
@@ -160,7 +218,8 @@ defmodule ExInvoiceTest do
       )
 
     assert ExInvoice.validate_invoice(invalid_invoice) ==
-             {:error, "Value exceeds maximum length of 20 characters."}
+             {:error,
+              "Validation failed for invoice #{invalid_invoice.id}: Value exceeds maximum length of 20 characters."}
   end
 
   # Test for city_name
@@ -172,9 +231,11 @@ defmodule ExInvoiceTest do
         Map.put(@valid_invoice.seller_trade_party, :city_name, "")
       )
 
-    assert ExInvoice.validate_invoice(invalid_invoice) == {:error, "Missing field: city_name"}
+    assert ExInvoice.validate_invoice(invalid_invoice) ==
+             {:error,
+              "Validation failed for invoice #{invalid_invoice.id}: Missing field: city_name"}
   end
-
+ # Test for city_name = nil
   test "City_name nil" do
     invalid_invoice =
       Map.put(
@@ -183,7 +244,9 @@ defmodule ExInvoiceTest do
         Map.put(@valid_invoice.seller_trade_party, :city_name, nil)
       )
 
-    assert ExInvoice.validate_invoice(invalid_invoice) == {:error, "Missing field: city_name"}
+    assert ExInvoice.validate_invoice(invalid_invoice) ==
+             {:error,
+              "Validation failed for invoice #{invalid_invoice.id}: Missing field: city_name"}
   end
 
   # Test for missing postal code
@@ -196,7 +259,8 @@ defmodule ExInvoiceTest do
       )
 
     assert ExInvoice.validate_invoice(invalid_invoice) ==
-             {:error, "Missing field: post_code_code"}
+             {:error,
+              "Validation failed for invoice #{invalid_invoice.id}: Missing field: post_code_code"}
   end
 
   # Test invalid postal code
@@ -209,7 +273,8 @@ defmodule ExInvoiceTest do
       )
 
     assert ExInvoice.validate_invoice(invalid_invoice) ==
-             {:error, "German postal code is not valid"}
+             {:error,
+              "Validation failed for invoice #{invalid_invoice.id}: German postal code is not valid"}
   end
 
   # Test invalid postal code
@@ -222,7 +287,8 @@ defmodule ExInvoiceTest do
       )
 
     assert ExInvoice.validate_invoice(invalid_invoice) ==
-             {:error, "German postal code is not valid"}
+             {:error,
+              "Validation failed for invoice #{invalid_invoice.id}: German postal code is not valid"}
   end
 
   # Test valid postal code
@@ -251,7 +317,7 @@ defmodule ExInvoiceTest do
              {:ok, "Validation successful. PDF 2024_Q3_234234.pdf is created."}
   end
 
-  # Test Nachname
+  # Test name too long
   test "Invalid trading_business_name name too long" do
     invalid_invoice =
       Map.put(
@@ -265,9 +331,31 @@ defmodule ExInvoiceTest do
       )
 
     assert ExInvoice.validate_invoice(invalid_invoice) ==
-             {:error, "Value exceeds maximum length of 35 characters."}
+             {:error,
+              "Validation failed for invoice #{invalid_invoice.id}: Value exceeds maximum length of 35 characters."}
   end
 
+# Test trading_business_name = nil
+test "Test trading_business_name =nil" do
+  invalid_invoice =
+    Map.put(
+      @valid_invoice,
+      :buyertradeparty,
+      Map.put(
+        @valid_invoice.buyertradeparty,
+        :trading_business_name,
+        nil
+      )
+    )
+
+  assert ExInvoice.validate_invoice(invalid_invoice) ==
+           {:error,
+            "Validation failed for invoice #{invalid_invoice.id}: Missing field: surname or trading_business_name"}
+end
+
+
+
+  #Test Invalid trading_business_name, forename, and surname missing
   test "Invalid trading_business_name, forename, and surname missing" do
     invalid_address =
       @valid_invoice.seller_trade_party
@@ -278,9 +366,11 @@ defmodule ExInvoiceTest do
     invalid_invoice = Map.put(@valid_invoice, :seller_trade_party, invalid_address)
 
     assert ExInvoice.validate_invoice(invalid_invoice) ==
-             {:error, "Missing field: surname or trading_business_name"}
+             {:error,
+              "Validation failed for invoice #{invalid_invoice.id}: Missing field: surname or trading_business_name"}
   end
 
+  #Test Valid trading_business_name, forename, and surname missing
   test "Valid trading_business_name, forename, and surname missing" do
     invalid_address =
       @valid_invoice.seller_trade_party
@@ -294,6 +384,7 @@ defmodule ExInvoiceTest do
              {:ok, "Validation successful. PDF 2024_Q3_234234.pdf is created."}
   end
 
+  #Test Invalid trading_business_name, Valid forename, and surname missing
   test "Invalid trading_business_name, Valid forename, and surname missing" do
     invalid_address =
       @valid_invoice.seller_trade_party
@@ -304,34 +395,38 @@ defmodule ExInvoiceTest do
     invalid_invoice = Map.put(@valid_invoice, :seller_trade_party, invalid_address)
 
     assert ExInvoice.validate_invoice(invalid_invoice) ==
-             {:error, "Missing field: surname or trading_business_name"}
+             {:error,
+              "Validation failed for invoice #{invalid_invoice.id}: Missing field: surname or trading_business_name"}
   end
 
   # TAX
-
+#Test Invalid VAT number, tax ok
   test "Invalid VAT number, tax ok" do
-    # Wrong VAT
     invalid_invoice = put_in(@valid_invoice[:seller_trade_party][:vat_number], "INVALID")
 
     assert ExInvoice.validate_invoice(invalid_invoice) ==
              {:ok, "Validation successful. PDF 2024_Q3_234234.pdf is created."}
   end
-
+#Test Invalid Paymet method
   test "Invalid payment method" do
-    # Invalid Paymet method
+
     invalid_invoice = Map.put(@valid_invoice, :invoice_payment_method, "Bitcoin")
 
     assert ExInvoice.validate_invoice(invalid_invoice) ==
-             {:error, "Payment method must be one of Überweisung, Kreditkarte, PayPal"}
+             {:error,
+              "Validation failed for invoice #{invalid_invoice.id}: Payment method must be one of Überweisung, Kreditkarte, PayPal"}
   end
 
   # Test invalid tax rate invoice_tax_rate
   test "Invalid tax rate" do
     invalid_invoice = Map.put(@valid_invoice, :invoice_tax_rate, 3)
-    assert ExInvoice.validate_invoice(invalid_invoice) == {:error, "Tax: invalid input value"}
+
+    assert ExInvoice.validate_invoice(invalid_invoice) ==
+             {:error,
+              "Validation failed for invoice #{invalid_invoice.id}: Tax: invalid input value"}
   end
 
-  # Test für ungültige IBAN
+  # Test invalid IBAN
   test "Invalid IBAN" do
     invalid_invoice =
       Map.put(
@@ -341,7 +436,8 @@ defmodule ExInvoiceTest do
       )
 
     assert ExInvoice.validate_invoice(invalid_invoice) ==
-             {:error, "IBAN validation failed: invalid_format"}
+             {:error,
+              "Validation failed for invoice #{invalid_invoice.id}: IBAN validation failed: invalid_format"}
   end
 
   # -----------------------
@@ -358,6 +454,7 @@ defmodule ExInvoiceTest do
              {:ok, "Validation successful. PDF 2024_Q3_234234.pdf is created."}
   end
 
+  #Test german Valid German tax number (11 digits)
   test "Valid German tax number (11 digits)" do
     invalid_address =
       @valid_invoice.seller_trade_party
@@ -393,7 +490,8 @@ defmodule ExInvoiceTest do
     invalid_invoice = Map.put(@valid_invoice, :seller_trade_party, invalid_address)
 
     assert ExInvoice.validate_invoice(invalid_invoice) ==
-             {:error, "Invalid tax number and invalid VAT number"}
+             {:error,
+              "Validation failed for invoice #{invalid_invoice.id}: Invalid tax number and invalid VAT number"}
   end
 
   # Test for Invalid German VAT ID too short
@@ -406,7 +504,8 @@ defmodule ExInvoiceTest do
     invalid_invoice = Map.put(@valid_invoice, :seller_trade_party, invalid_address)
 
     assert ExInvoice.validate_invoice(invalid_invoice) ==
-             {:error, "Invalid tax number and invalid VAT number"}
+             {:error,
+              "Validation failed for invoice #{invalid_invoice.id}: Invalid tax number and invalid VAT number"}
   end
 
   # Test for Invalid German VAT ID (empty string)
@@ -419,7 +518,8 @@ defmodule ExInvoiceTest do
     invalid_invoice = Map.put(@valid_invoice, :seller_trade_party, invalid_address)
 
     assert ExInvoice.validate_invoice(invalid_invoice) ==
-             {:error, "Invalid tax number and invalid VAT number"}
+             {:error,
+              "Validation failed for invoice #{invalid_invoice.id}: Invalid tax number and invalid VAT number"}
   end
 
   # Test for an invalid VAT ID (nil)
@@ -432,10 +532,12 @@ defmodule ExInvoiceTest do
     invalid_invoice = Map.put(@valid_invoice, :seller_trade_party, invalid_address)
 
     assert ExInvoice.validate_invoice(invalid_invoice) ==
-             {:error, "Invalid tax number and invalid VAT number"}
+             {:error,
+              "Validation failed for invoice #{invalid_invoice.id}: Invalid tax number and invalid VAT number"}
   end
 
   # ITEMS
+  #Test for Invalid item name too long
   test "Invalid item name too long" do
     invalid_invoice =
       update_in(@valid_invoice[:invoice_items], fn items ->
@@ -443,9 +545,10 @@ defmodule ExInvoiceTest do
       end)
 
     assert ExInvoice.validate_invoice(invalid_invoice) ==
-             {:error, "Item name exceeds maximum length of 25 characters"}
+             {:error,
+              "Validation failed for invoice #{invalid_invoice.id}: Item name exceeds maximum length of 25 characters"}
   end
-
+  #Test for Invalid item quantity is nil
   test "Invalid item quantity is nil" do
     invalid_invoice =
       update_in(@valid_invoice[:invoice_items], fn items ->
@@ -453,9 +556,11 @@ defmodule ExInvoiceTest do
       end)
 
     assert ExInvoice.validate_invoice(invalid_invoice) ==
-             {:error, "Item has missing or invalid fields: quantity"}
+             {:error,
+              "Validation failed for invoice #{invalid_invoice.id}: Item has missing or invalid fields: quantity"}
   end
 
+  #Test Invalid item quantity is not a number
   test "Invalid item quantity is not a number" do
     invalid_invoice =
       update_in(@valid_invoice[:invoice_items], fn items ->
@@ -463,8 +568,26 @@ defmodule ExInvoiceTest do
       end)
 
     assert ExInvoice.validate_invoice(invalid_invoice) ==
-             {:error, "Item has missing or invalid fields: quantity"}
+             {:error,
+              "Validation failed for invoice #{invalid_invoice.id}: Item has missing or invalid fields: quantity"}
   end
+
+  # Test invalid tax rate (negative)
+test "Negative tax rate" do
+  invalid_invoice = Map.put(@valid_invoice, :invoice_tax_rate, -19)
+
+  assert ExInvoice.validate_invoice(invalid_invoice) ==
+           {:error, "Validation failed for invoice #{invalid_invoice.id}: Tax: invalid input value"}
+end
+
+# Test for missing invoice items
+test "Missing invoice items" do
+  invalid_invoice = Map.put(@valid_invoice, :invoice_items, [])
+
+  assert ExInvoice.validate_invoice(invalid_invoice) ==
+           {:error, "Validation failed for invoice #{invalid_invoice.id}: Invoice must contain at least one item."}
+end
+
 
   # -----------------------
 end
