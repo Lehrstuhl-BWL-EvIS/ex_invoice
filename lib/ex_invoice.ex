@@ -77,9 +77,6 @@ defmodule ExInvoice do
         ]
       end
 
-    # Result for every invoice
-    # IO.inspect(results, label: "Validation results for invoice #{invoice[:id]}")
-
     # Collecting all errors
     errors =
       results
@@ -207,8 +204,6 @@ defmodule ExInvoice do
   defp validate_vat_number(nil), do: {:error, "No VAT number provided"}
 
   defp validate_vat_number(number) when is_binary(number) do
-    # IO.inspect(ExVatcheck.check(number), label: "ExVatcheck Result")
-
     case ExVatcheck.check(number) do
       %ExVatcheck.VAT{valid: true} ->
         {:ok, "#{number} VAT_Number_valid"}
