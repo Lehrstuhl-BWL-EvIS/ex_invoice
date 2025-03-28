@@ -2,12 +2,13 @@
 
 > ⚠️ Work in progress, not ready for production ⚡
 
-**TODO: Add description**
+ExInvoice is an Elixir library for generating legally compliant e-invoices, with an initial focus on German regulations.
+The first release supports PDF invoices only.
+Support for e-invoices following the Factur-X format is planned for a future release.
 
 ## Installation
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `ex_invoice` to your list of dependencies in `mix.exs`:
+If [available in Hex](https://hex.pm/docs/publish), the package can be installed by adding `ex_invoice` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
@@ -17,7 +18,6 @@ def deps do
 end
 ```
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at <https://hexdocs.pm/ex_invoice>.
+## Documentation
 
+Once published, the docs can be found at <https://hexdocs.pm/ex_invoice>.
